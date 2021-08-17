@@ -7,8 +7,7 @@ import (
 
 func main() {
 	t := node.NewNode(1)
-	t.PopulateBinaryTreeOverlap()
+	t.PopulateBigTree()
 	drawtree.ReingoldTilford(t)
-
 	drawtree.Draw(t, "test.png")
 }

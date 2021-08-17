@@ -1,22 +1,20 @@
 package drawtree
 
 import (
-	"log"
-
 	"github.com/jessesomerville/tree/pkg/node"
 )
 
-func ReingoldTilford(n *node.Node) {
-	build(n, 0)
-	addMod(n, 0)
+func ReingoldTilford(root *node.Node) {
+	if len(root.Children) == 0 {
+		return
+	}
+	rtBuild(root, 0)
+	addMod(root, 0)
 }
 
-func build(n *node.Node, depth int) *node.Node {
-	if len(n.Children) > 2 {
-		log.Fatal("tree must be a binary tree")
-	}
-
+func rtBuild(n *node.Node, depth int) *node.Node {
 	n.Y = depth
+
 	if len(n.Children) == 0 {
 		n.X = 0
 		return n
@@ -24,88 +22,112 @@ func build(n *node.Node, depth int) *node.Node {
 
 	if len(n.Children) == 1 {
 		child := n.Children[0]
-		n.X = build(child, depth+1).X
+		n.X = rtBuild(child, depth+1).X
 		return n
 	}
-	lChild, rChild := n.Children[0], n.Children[1]
-	left := build(lChild, depth+1)
-	right := build(rChild, depth+1)
-	n.X = fixSubtrees(left, right)
+
+	leftChild := n.Children[0]
+	rightChild := n.Children[1]
+	lSubtree := rtBuild(leftChild, depth+1)
+	rSubtree := rtBuild(rightChild, depth+1)
+
+	n.X = adjustSubtrees(lSubtree, rSubtree)
 	return n
 }
 
-func addMod(n *node.Node, mod int) {
-	n.X += mod
-	for _, child := range n.Children {
-		addMod(child, mod+n.Mod)
+func adjustSubtrees(left, right *node.Node) int {
+	distToMove := 0
+	lChan := rightContour(left)
+	rChan := leftContour(right)
+
+	var lNode, rNode, lPrev, rPrev *node.Node
+	var lMore, rMore bool
+	lOffset, rOffset := left.Mod, right.Mod
+	for {
+		lNode, lMore = <-lChan
+		rNode, rMore = <-rChan
+		if !lMore && !rMore {
+			break
+		} else if !lMore {
+			lPrev.Thread = rNode
+			break
+		} else if !rMore {
+			rPrev.Thread = lNode
+			break
+		}
+		lPos := lNode.X + lOffset
+		rPos := rNode.X + rOffset
+		if dist := lPos - rPos; dist > distToMove {
+			distToMove = dist
+		}
+		lPrev, rPrev = lNode, rNode
+		lOffset += lNode.Mod
+		rOffset += rNode.Mod
+	}
+	distToMove += 1
+	distToMove += (right.X + left.X + distToMove) % 2
+	right.Mod = distToMove
+	right.X += distToMove
+
+	return (right.X + left.X) / 2
+}
+
+func leftContour(n *node.Node) <-chan *node.Node {
+	c := make(chan *node.Node)
+	go findLeftContour(n, c)
+	return c
+}
+
+func findLeftContour(n *node.Node, c chan<- *node.Node) {
+	c <- n
+	if next := nextLeft(n); next != nil {
+		findLeftContour(next, c)
+	} else {
+		close(c)
+	}
+}
+
+func nextLeft(n *node.Node) *node.Node {
+	if len(n.Children) != 0 {
+		return n.Children[0]
+	}
+	if n.Thread != nil {
+		return n.Thread
+	}
+	return nil
+}
+
+func rightContour(n *node.Node) <-chan *node.Node {
+	c := make(chan *node.Node)
+	go findRightContour(n, c)
+	return c
+}
+
+func findRightContour(n *node.Node, c chan<- *node.Node) {
+	c <- n
+	if next := nextRight(n); next != nil {
+		findRightContour(next, c)
+	} else {
+		close(c)
 	}
 }
 
 func nextRight(n *node.Node) *node.Node {
-	if n.Thread != nil {
-		return n.Thread
-	}
-	if len(n.Children) > 0 {
-		return n.Children[len(n.Children)-1]
-	}
-	return nil
-}
-
-func nextLeft(n *node.Node) *node.Node {
-	if n.Thread != nil {
-		return n.Thread
-	}
-	if len(n.Children) > 0 {
+	if len(n.Children) == 1 {
 		return n.Children[0]
 	}
+	if len(n.Children) == 2 {
+		return n.Children[1]
+	}
+	if n.Thread != nil {
+		return n.Thread
+	}
 	return nil
 }
 
-func contour(left, right, leftOuter, rightOuter *node.Node, maxOffset, lOffset, rOffset int) (*node.Node, *node.Node, *node.Node, *node.Node, int, int, int) {
-	delta := (left.X + lOffset) - (right.X + rOffset)
-	if maxOffset == 0 || delta > maxOffset {
-		maxOffset = delta
+func addMod(n *node.Node, currMod int) {
+	n.X += currMod
+	for _, child := range n.Children {
+		addMod(child, currMod+n.Mod)
 	}
-
-	if leftOuter == nil {
-		leftOuter = left
-	}
-	if rightOuter == nil {
-		rightOuter = right
-	}
-
-	lo := nextLeft(leftOuter)
-	li := nextRight(left)
-	ri := nextLeft(right)
-	ro := nextRight(rightOuter)
-
-	if li != nil && ri != nil {
-		lOffset += left.Mod
-		rOffset += right.Mod
-		return contour(li, ri, lo, ro, maxOffset, lOffset, rOffset)
-	}
-	return li, ri, leftOuter, rightOuter, maxOffset, lOffset, rOffset
-}
-
-func fixSubtrees(left, right *node.Node) int {
-	li, ri, lo, ro, diff, lOffset, rOffset := contour(left, right, nil, nil, 0, 0, 0)
-	diff += 1
-	diff += (right.X + diff + left.X) % 2
-
-	right.Mod = diff
-	right.X += diff
-
-	if len(right.Children) > 0 {
-		rOffset += diff
-	}
-
-	if ri != nil && li == nil {
-		lo.Thread = ri
-		lo.Mod = rOffset - lOffset
-	} else if ri == nil && li != nil {
-		ro.Thread = li
-		ro.Mod = lOffset - rOffset
-	}
-
-	return (left.X + right.X) / 2
 }
