@@ -2,68 +2,35 @@ package drawtree
 
 import (
 	"fmt"
-	"image"
-	"image/color"
-	"log"
 
 	"github.com/fogleman/gg"
-	"github.com/golang/freetype/truetype"
-	"golang.org/x/image/font"
-	"golang.org/x/image/font/gofont/goregular"
 
 	"github.com/jessesomerville/tree/pkg/node"
 )
 
-const (
-	nodeSize = 35.0
-	padding  = nodeSize * 3
-	stroke   = 2.0
-	fontSize = nodeSize * 0.75
-)
+func Draw(n *node.Node, algo func(*node.Node), filename string, cfg *DrawConfig) {
+	algo(n)
 
-var (
-	fontFace font.Face
-)
-
-func init() {
-	font, err := truetype.Parse(goregular.TTF)
-	if err != nil {
-		log.Fatalf("failed to parse font: %v", err)
+	if cfg == nil {
+		cfg = DefaultConfig()
 	}
 
-	fontFace = truetype.NewFace(font, &truetype.Options{Size: fontSize})
-}
+	w, h := scaleNodePositions(n, cfg.Padding)
+	dc := gg.NewContext(w+cfg.Padding, h+cfg.Padding)
+	dc.SetColor(cfg.BgColor)
+	dc.Clear()
 
-func Draw(n *node.Node, filename string) {
-	maxX, maxY := scaleNodePositions(n)
-	w, h := int(maxX+padding), int(maxY+padding)
-	dc := getCanvas(n, w, h, image.White)
-	drawTree(dc, n)
+	drawTree(dc, n, cfg)
 	dc.SavePNG(filename)
 }
 
-func getCanvas(t *node.Node, w, h int, bgColor color.Color) *gg.Context {
-	canvas := gg.NewContext(w, h)
-	canvas.SetColor(bgColor)
-	canvas.Clear()
-	return canvas
-}
-
-func drawTree(dc *gg.Context, n *node.Node) {
-	for _, child := range n.Children {
-		drawEdge(dc, n, child)
-		drawTree(dc, child)
-	}
-	drawNode(dc, n)
-}
-
-func scaleNodePositions(n *node.Node) (int, int) {
+func scaleNodePositions(n *node.Node, padding int) (int, int) {
 	n.X = (n.X + 1) * padding
 	n.Y = (n.Y + 1) * padding
 	maxX, maxY := n.X, n.Y
 
 	for _, child := range n.Children {
-		x, y := scaleNodePositions(child)
+		x, y := scaleNodePositions(child, padding)
 		if x > maxX {
 			maxX = x
 		}
@@ -74,29 +41,50 @@ func scaleNodePositions(n *node.Node) (int, int) {
 	return maxX, maxY
 }
 
-func drawNode(dc *gg.Context, n *node.Node) {
-	drawNodeCircle(dc, n.X, n.Y)
+func drawTree(dc *gg.Context, n *node.Node, cfg *DrawConfig) {
+	// if tNode := n.Thread; tNode != nil {
+	// 	drawThread(dc, n, tNode, cfg)
+	// }
+	for _, child := range n.Children {
+		drawEdge(dc, n, child, cfg)
+		drawTree(dc, child, cfg)
+	}
+	drawNode(dc, n, cfg)
+}
 
+func drawNode(dc *gg.Context, n *node.Node, cfg *DrawConfig) {
+	drawNodeCircle(dc, n.X, n.Y, cfg)
+
+	fontFace := loadFont(n.Font, cfg.FontSize)
 	dc.SetFontFace(fontFace)
-	dc.SetColor(image.Black)
+	dc.SetColor(cfg.FgColor)
 	text := fmt.Sprintf("%d", n.Value)
 	dc.DrawStringAnchored(text, float64(n.X), float64(n.Y), 0.5, 0.5)
 }
 
-func drawNodeCircle(dc *gg.Context, x, y int) {
-	dc.DrawCircle(float64(x), float64(y), nodeSize)
+func drawNodeCircle(dc *gg.Context, x, y int, cfg *DrawConfig) {
+	dc.DrawCircle(float64(x), float64(y), cfg.NodeSize)
 
-	dc.SetLineWidth(stroke)
-	dc.SetColor(image.Black)
+	dc.SetLineWidth(cfg.Stroke)
+	dc.SetColor(cfg.FgColor)
 	dc.StrokePreserve()
 
-	dc.SetColor(image.White)
+	dc.SetColor(cfg.BgColor)
 	dc.Fill()
 }
 
-func drawEdge(dc *gg.Context, n1, n2 *node.Node) {
-	dc.SetColor(image.Black)
+func drawEdge(dc *gg.Context, n1, n2 *node.Node, cfg *DrawConfig) {
+	dc.SetColor(cfg.FgColor)
 	dc.DrawLine(float64(n1.X), float64(n1.Y), float64(n2.X), float64(n2.Y))
-	dc.SetLineWidth(stroke)
+	dc.SetLineWidth(cfg.Stroke)
 	dc.Stroke()
+}
+
+func drawThread(dc *gg.Context, n1, n2 *node.Node, cfg *DrawConfig) {
+	dc.SetColor(cfg.FgColor)
+	dc.DrawLine(float64(n1.X), float64(n1.Y), float64(n2.X), float64(n2.Y))
+	dc.SetDash(16, 24)
+	dc.SetLineWidth(cfg.Stroke)
+	dc.Stroke()
+	dc.SetDash()
 }

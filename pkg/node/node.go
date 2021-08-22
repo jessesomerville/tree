@@ -1,15 +1,23 @@
 package node
 
+import (
+	"io/ioutil"
+	"log"
+
+	"gopkg.in/yaml.v3"
+)
+
 type Node struct {
-	Value    int
-	Children []*Node
+	Value    int     `yaml:"value"`
+	Children []*Node `yaml:"children,omitempty"`
 	Thread   *Node
 	X, Y     int
 	Mod      int
+	Font     int
 }
 
-func NewNode(value int) *Node {
-	return &Node{Value: value}
+func NewNode(value int, children ...*Node) *Node {
+	return &Node{Value: value, Children: children}
 }
 
 func (n *Node) AddChildren(children ...*Node) {
@@ -24,4 +32,17 @@ func (n *Node) GetHeight() int {
 		}
 	}
 	return height + 1
+}
+
+func ParseYAML(file string) *Node {
+	fBytes, err := ioutil.ReadFile(file)
+	if err != nil {
+		log.Fatalf("failed to read file %s: %v", file, err)
+	}
+
+	var root Node
+	if err := yaml.Unmarshal(fBytes, &root); err != nil {
+		log.Fatalf("failed to unmarshal tree: %v", err)
+	}
+	return &root
 }

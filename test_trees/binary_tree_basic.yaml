@@ -1,0 +1,8 @@
+#    1
+#   / \
+#  2   3
+
+value: 1
+children:
+  - value: 2
+  - value: 3
