@@ -42,9 +42,6 @@ func scaleNodePositions(n *node.Node, padding int) (int, int) {
 }
 
 func drawTree(dc *gg.Context, n *node.Node, cfg *DrawConfig) {
-	// if tNode := n.Thread; tNode != nil {
-	// 	drawThread(dc, n, tNode, cfg)
-	// }
 	for _, child := range n.Children {
 		drawEdge(dc, n, child, cfg)
 		drawTree(dc, child, cfg)
